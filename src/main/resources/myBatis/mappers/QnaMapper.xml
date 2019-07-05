@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="QnaMapper">
+	<!-- query 조각 -->
+	<sql id="subRef">
+		(select ref from qna where num=#{num})
+	</sql>
+	<sql id="subStep">
+		(select step from qna where num=#{num})
+	</sql>
+
+	<!-- 원본 글쓰기 -->
+	<insert id="setWrite" parameterType="QnaDTO">
+		<selectKey keyProperty="num" resultType="Integer" order="BEFORE">
+			select notice_seq.nextval from dual
+		</selectKey>
+		insert into qna values(#{num}, #{title}, #{writer}, #{contents}, sysdate, 0, #{num}, 0, 0)
+	</insert>
+	<update id="setUpdate" parameterType="QnaDTO">
+		update qna set title=#{title}, contents=#{contents} where num=#{num}
+	</update>
+	
+	<delete id="setDelete" parameterType="Integer">
+		delete qna where num=#{num}
+	</delete>
+	
+	<select id="getList" parameterType="PageMaker" resultType="QnaDTO">
+		select * from 
+		(select rownum R, Q.* from 
+		(select * from qna 
+		<choose>
+			<when test="kind = 1">
+				where title
+			</when>
+			<when test="kind = 2">
+				where writer
+			</when>
+			<otherwise>
+				where contents
+			</otherwise>
+		</choose>
+		like '%'||#{search}||'%' order by ref desc, step asc) Q)
+		where R between #{startRow} and #{lastRow}
+	</select>
+	<!-- 답글 사전작업 -->
+	<update id="setReplyUpdate" parameterType="QnaDTO">
+		update qna set step=step+1 where 
+		ref=<include refid="subRef" />
+		and
+		step > <include refid="subStep"></include>
+	</update>
+	
+	<!-- 답글  -->
+	<insert id="setReply" parameterType="QnaDTO">
+		insert into qna values(notice_seq.nextval, #{title}, #{writer}, #{contents}, sysdate, 0,
+		<include refid="subRef" />, 
+		<include refid="subStep" />+1,
+		(select depth from qna where num=#{num})+1
+		)
+	</insert>
+	
+	<!-- totalCount pageing 처리 -->
+	<select id="getCount" parameterType="PageMaker" resultType="Integer">
+		select count(num) from qna 
+		<choose>
+			<when test="kind = 1">
+				where title
+			</when>
+			<when test="kind = 2">
+				where writer
+			</when>
+			<otherwise>
+				where contents
+			</otherwise>
+		</choose>
+		like '%'||#{search}||'%'
+	</select>
+	
+	<select id="getSelect" parameterType="Integer" resultMap="qnaResult">
+		select * from qna Q FULL JOIN files F
+		on (Q.num = F.num)
+		where Q.num=#{num}
+	</select>
+	
+	
+	
+	
+	<!-- Result Map -->
+	<resultMap type="QnaDTO" id="qnaResult">
+		<!-- primary key -->
+		<id property="num" column="num"/> <!-- property DTO의 멤버변수명 , column : DB의 컬럼명-->
+		<result property="title" column="title"/>
+		<result property="writer" column="writer"/>
+		<result property="contents" column="contents"/>
+		<result property="reg_date" column="reg_date"/>
+		<result property="hit" column="hit"/>
+		<result property="ref" column="ref"/>
+		<result property="step" column="step"/>
+		<result property="depth" column="depth"/>
+		<collection property="files" javaType="java.util.List" ofType="FileDTO" resultMap="fileResult" ></collection>
+	</resultMap>
+	
+	<resultMap type="FileDTO" id="fileResult">
+		<id property="fnum" column="fnum"/>
+		<result property="num" column="num"/>
+		<result property="fname" column="fname"/>
+		<result property="oname" column="oname"/>
+	</resultMap>
+	
+	
+	
+	
+	
+	
+	
+
+	
+</mapper>
